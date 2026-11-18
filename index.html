@@ -466,7 +466,8 @@
             }
 
             syncProfileUI();
-            document.getElementById('refLink').value = `https://sr-investments.com/reg?code=${user}`;
+            let currentDomain = window.location.origin; // Automatically gets https://your-project.vercel.app
+document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             alert('🎉 Registration successful! You have received a UGX 3,000 welcome bonus.');
             launchApp();
         }
@@ -503,7 +504,9 @@
             }
 
             syncProfileUI();
-            document.getElementById('refLink').value = `https://sr-investments.com/reg?code=${user}`;
+            let currentDomain = window.location.origin; // Automatically gets https://your-project.vercel.app
+document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
+
             launchApp();
         }
 
@@ -1076,6 +1079,19 @@
             requestAnimationFrame(draw);
         }
         draw();
+        // Automatically capture and fill referral code when someone opens an invite link
+window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref') || urlParams.get('code');
+    
+    if (refCode) {
+        const refInput = document.getElementById('reg-ref');
+        if (refInput) {
+            refInput.value = refCode;
+        }
+    }
+});
+
     </script>
 </body>
 </html> 
