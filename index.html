@@ -153,6 +153,24 @@
             box-shadow: 0 4px 10px rgba(0, 136, 204, 0.4);
         }
     </style>
+
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDfRjk36a68GQ9dzcxOKSGn9u5wV-cupCo",
+            authDomain: "sr-investments-18e74.firebaseapp.com",
+            projectId: "sr-investments-18e74",
+            storageBucket: "sr-investments-18e74.firebasestorage.app",
+            messagingSenderId: "781262590520",
+            appId: "1:781262590520:web:d6d49a6002f45e7ce2cccd"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
 </head>
 <body>
 
@@ -246,7 +264,7 @@
                 <div style="color:var(--primary); font-weight:bold; font-size:15px; margin-bottom:4px;">INVESTMENT OPPORTUNITIES</div>
                 <div style="font-size:11px; color:var(--muted); margin-bottom:12px;">Earn 10% daily automated payouts for 180 days.</div>
 
-                <div class="plan-row"><div class="plan-info"><div>15,000 /=</div><div>Daily (10%): +1,500 /= | Total: 270,000 /=</div></div><button class="btn" style="padding:8px 12px; background:var::success;" onclick="investPlan(15000, 1500)">Invest</button></div>
+                <div class="plan-row"><div class="plan-info"><div>15,000 /=</div><div>Daily (10%): +1,500 /= | Total: 270,000 /=</div></div><button class="btn" style="padding:8px 12px; background:var(--success);" onclick="investPlan(15000, 1500)">Invest</button></div>
                 <div class="plan-row"><div class="plan-info"><div>30,000 /=</div><div>Daily (10%): +3,000 /= | Total: 540,000 /=</div></div><button class="btn" style="padding:8px 12px; background:var(--success);" onclick="investPlan(30000, 3000)">Invest</button></div>
                 <div class="plan-row"><div class="plan-info"><div>50,000 /=</div><div>Daily (10%): +5,000 /= | Total: 900,000 /=</div></div><button class="btn" style="padding:8px 12px; background:var(--success);" onclick="investPlan(50000, 5000)">Invest</button></div>
                 <div class="plan-row"><div class="plan-info"><div>100,000 /=</div><div>Daily (10%): +10,000 /= | Total: 1,800,000 /=</div></div><button class="btn" style="padding:8px 12px; background:var(--success);" onclick="investPlan(100000, 10000)">Invest</button></div>
@@ -335,17 +353,17 @@
                     <!-- Admin Social Links Updater -->
                     <div style="background:#0d1424; padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom:15px;">
                         <div style="font-size:12px; font-weight:bold; color:var(--primary); margin-bottom:6px;">📱 Update Social Link URLs</div>
-                        
-                        <label style="font-size:10px; color:var(--muted);">WhatsApp Group Link</label>
-                        <input type="text" id="adminWhatsappInput" class="input" style="font-size:11px; margin:4px 0 8px 0;" placeholder="https://chat.whatsapp.com/...">
 
+                        <label style="font-size:10px; color:var(--muted);">WhatsApp Link</label>
+                        <input type="text" id="adminWhatsappInput" class="input" style="font-size:11px; margin:4px 0 8px 0;" placeholder="https://chat.whatsapp.com/...">
+                        
                         <label style="font-size:10px; color:var(--muted);">Telegram Link</label>
                         <input type="text" id="adminTelegramInput" class="input" style="font-size:11px; margin:4px 0 8px 0;" placeholder="https://t.me/...">
 
                         <button class="btn" style="width:100%; font-size:11px; background:#334155;" onclick="saveAdminSocialLinks()">Save Links</button>
                     </div>
 
-                     <div style="font-size:13px; font-weight:bold; color:white; margin-bottom:6px;">Pending Deposits</div>
+                    <div style="font-size:13px; font-weight:bold; color:white; margin-bottom:6px;">Pending Deposits</div>
                     <div id="adminPendingDeposits" style="margin-bottom:15px; font-size:12px; color:var(--muted);">No pending deposits.</div>
 
                     <div style="font-size:13px; font-weight:bold; color:white; margin-bottom:6px;">Pending Withdrawals</div>
@@ -381,29 +399,108 @@
     </div>
 
     <script>
-        // Multi-user database mock simulation mapping user phone/email to state including permanent product record storage
         let usersDB = {};
         let currentUserPhone = '';
         let registeredUserStore = null;
         let txs = [];
         
-        // Global Social Links Storage
         let appConfig = {
             whatsapp: "https://chat.whatsapp.com/J8WonMtmqgW6ljsV5fI3l5?s=cl&p=a&mlu=4&ilr=4",
             telegram: "https://t.me/+s63xqIYPEdo5ZGI0"
         };
 
+        function applySocialLinksToUI() {
+            const waBtn = document.getElementById('floatWhatsappBtn');
+            const tgBtn = document.getElementById('floatTelegramBtn');
+            if (waBtn && appConfig.whatsapp) waBtn.href = appConfig.whatsapp;
+            if (tgBtn && appConfig.telegram) tgBtn.href = appConfig.telegram;
+        }
+
+        async function saveUserToFirebase(phone, uData) {
+            if (!phone || !uData || typeof db === 'undefined') return;
+            try {
+                await db.collection('users').doc(phone).set({
+                    ...uData,
+                    phone: phone,
+                    userProducts: Array.isArray(uData.userProducts) ? uData.userProducts : [],
+                    lastCheckInDate: uData.lastCheckInDate || '',
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (err) {
+                console.error('Error saving user to Firestore:', err);
+            }
+        }
+
+        async function loadUserFromFirebase(phone) {
+            if (!phone || typeof db === 'undefined') return null;
+            try {
+                const doc = await db.collection('users').doc(phone).get();
+                return doc.exists ? doc.data() : null;
+            } catch (err) {
+                console.error('Error loading user from Firestore:', err);
+                return null;
+            }
+        }
+
+        async function saveSharedStateToFirebase() {
+            if (typeof db === 'undefined') return;
+            try {
+                await db.collection('appState').doc('global').set({
+                    txs: Array.isArray(txs) ? txs.slice(0, 200) : [],
+                    appConfig: appConfig || {},
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (err) {
+                console.error('Error saving shared state to Firestore:', err);
+            }
+        }
+
+        async function loadSharedStateFromFirebase() {
+            if (typeof db === 'undefined') return;
+            try {
+                const doc = await db.collection('appState').doc('global').get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (Array.isArray(data.txs)) txs = data.txs;
+                    if (data.appConfig) {
+                        appConfig = { ...appConfig, ...data.appConfig };
+                        applySocialLinksToUI();
+                    }
+                }
+            } catch (err) {
+                console.error('Error loading shared state from Firestore:', err);
+            }
+        }
+
+        loadSharedStateFromFirebase();
+
         function getCurrentUserData() {
-            if(!usersDB[currentUserPhone]) {
+            if (!currentUserPhone) {
+                return {
+                    balance: 3000,
+                    totalDep: 0,
+                    totalWith: 0,
+                    totalEarn: 3000,
+                    userProducts: [],
+                    lastCheckInDate: '',
+                    displayName: 'User Name',
+                    avatarUrl: ''
+                };
+            }
+            if (!usersDB[currentUserPhone]) {
                 usersDB[currentUserPhone] = {
                     balance: 3000,
                     totalDep: 0,
                     totalWith: 0,
                     totalEarn: 3000,
-                    userProducts: [], // Retains user purchased products securely
-                    displayName: 'User Name',
+                    userProducts: [],
+                    lastCheckInDate: '',
+                    displayName: currentUserPhone,
                     avatarUrl: ''
                 };
+            }
+            if (!Array.isArray(usersDB[currentUserPhone].userProducts)) {
+                usersDB[currentUserPhone].userProducts = [];
             }
             return usersDB[currentUserPhone];
         }
@@ -414,7 +511,7 @@
             document.getElementById('tab-reg-btn').classList.remove('active');
             document.getElementById('tab-log-btn').classList.remove('active');
 
-            if(tab === 'register') {
+            if (tab === 'register') {
                 document.getElementById('register-form').classList.add('active');
                 document.getElementById('tab-reg-btn').classList.add('active');
             } else {
@@ -429,84 +526,108 @@
             return isEmail || isPhone;
         }
 
-        function handleRegister() {
+        async function handleRegister() {
             let user = document.getElementById('reg-user').value.trim();
             let pass = document.getElementById('reg-pass').value.trim();
             let passConfirm = document.getElementById('reg-pass-confirm').value.trim();
+            let refVal = document.getElementById('reg-ref') ? document.getElementById('reg-ref').value.trim() : '';
 
-            if(!validateUserIdentifier(user)) {
+            if (!validateUserIdentifier(user)) {
                 alert('Invalid input! Please enter a valid email or a 10-digit phone number starting with 07.');
                 return;
             }
 
-            if(!pass || !/^[a-zA-Z0-9]+$/.test(pass)) {
+            if (!pass || !/^[a-zA-Z0-9]+$/.test(pass)) {
                 alert('Password must be alphanumeric.');
                 return;
             }
 
-            if(pass !== passConfirm) {
+            if (pass !== passConfirm) {
                 alert('Passwords do not match!');
                 return;
             }
 
-            registeredUserStore = { user, pass };
             currentUserPhone = user;
-            
-            if(!usersDB[currentUserPhone]) {
-                usersDB[currentUserPhone] = {
+            const cloudUser = await loadUserFromFirebase(user);
+
+            if (cloudUser) {
+                usersDB[user] = {
+                    balance: cloudUser.balance ?? 3000,
+                    totalDep: cloudUser.totalDep ?? 0,
+                    totalWith: cloudUser.totalWith ?? 0,
+                    totalEarn: cloudUser.totalEarn ?? 3000,
+                    userProducts: Array.isArray(cloudUser.userProducts) ? cloudUser.userProducts : [],
+                    lastCheckInDate: cloudUser.lastCheckInDate || '',
+                    displayName: cloudUser.displayName || user,
+                    avatarUrl: cloudUser.avatarUrl || '',
+                    pass: cloudUser.pass || pass,
+                    referredBy: cloudUser.referredBy || refVal || ''
+                };
+                registeredUserStore = { user, pass: usersDB[user].pass };
+            } else {
+                usersDB[user] = {
                     balance: 3000,
                     totalDep: 0,
                     totalWith: 0,
                     totalEarn: 3000,
                     userProducts: [],
+                    lastCheckInDate: '',
                     displayName: user,
-                    avatarUrl: ''
+                    avatarUrl: '',
+                    pass: pass,
+                    referredBy: refVal || ''
                 };
-                txs.unshift({type: 'Welcome Bonus', amount: 3000, status: 'Approved', phone: user});
+                registeredUserStore = { user, pass };
+                txs.unshift({ type: 'Welcome Bonus', amount: 3000, status: 'Approved', phone: user });
+                await saveUserToFirebase(user, usersDB[user]);
+                await saveSharedStateToFirebase();
             }
 
             syncProfileUI();
-            let currentDomain = window.location.origin; // Automatically gets https://your-project.vercel.app
-document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
+            let currentDomain = window.location.origin;
+            document.getElementById('refLink').value = `${currentDomain}/?ref=${encodeURIComponent(user)}`;
             alert('🎉 Registration successful! You have received a UGX 3,000 welcome bonus.');
             launchApp();
         }
 
-        function handleLogin() {
+        async function handleLogin() {
             let user = document.getElementById('log-user').value.trim();
             let pass = document.getElementById('log-pass').value.trim();
 
-            if(!registeredUserStore) {
-                if(!validateUserIdentifier(user) || pass.length === 0) {
-                    alert('Please register first or enter valid credentials.');
-                    return;
-                }
-                registeredUserStore = { user, pass };
-            } else {
-                if(user !== registeredUserStore.user || pass !== registeredUserStore.pass) {
-                    alert('Incorrect phone/email or password!');
-                    return;
-                }
+            if (!validateUserIdentifier(user) || pass.length === 0) {
+                alert('Please enter a valid phone/email and password.');
+                return;
             }
-            currentUserPhone = user;
 
-            if(!usersDB[currentUserPhone]) {
-                usersDB[currentUserPhone] = {
-                    balance: 3000,
-                    totalDep: 0,
-                    totalWith: 0,
-                    totalEarn: 3000,
-                    userProducts: [],
-                    displayName: user,
-                    avatarUrl: ''
-                };
-                txs.unshift({type: 'Welcome Bonus', amount: 3000, status: 'Approved', phone: user});
+            const cloudUser = await loadUserFromFirebase(user);
+            if (!cloudUser) {
+                alert('Account not found! Please register first.');
+                return;
             }
+
+            if (cloudUser.pass && cloudUser.pass !== pass) {
+                alert('Incorrect phone/email or password!');
+                return;
+            }
+
+            currentUserPhone = user;
+            registeredUserStore = { user, pass: cloudUser.pass || pass };
+            usersDB[user] = {
+                balance: cloudUser.balance ?? 3000,
+                totalDep: cloudUser.totalDep ?? 0,
+                totalWith: cloudUser.totalWith ?? 0,
+                totalEarn: cloudUser.totalEarn ?? 3000,
+                userProducts: Array.isArray(cloudUser.userProducts) ? cloudUser.userProducts : [],
+                lastCheckInDate: cloudUser.lastCheckInDate || '',
+                displayName: cloudUser.displayName || user,
+                avatarUrl: cloudUser.avatarUrl || '',
+                pass: cloudUser.pass || pass,
+                referredBy: cloudUser.referredBy || ''
+            };
 
             syncProfileUI();
-            let currentDomain = window.location.origin; // Automatically gets https://your-project.vercel.app
-document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
-
+            let currentDomain = window.location.origin;
+            document.getElementById('refLink').value = `${currentDomain}/?ref=${encodeURIComponent(user)}`;
             launchApp();
         }
 
@@ -515,9 +636,9 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             document.getElementById('profilePhoneDisplay').innerText = currentUserPhone;
             document.getElementById('profileDisplayName').innerText = uData.displayName;
             document.getElementById('settingNameInput').value = uData.displayName;
-            
+
             let avatarImg = document.getElementById('profileAvatarImg');
-            if(uData.avatarUrl) {
+            if (uData.avatarUrl) {
                 avatarImg.src = uData.avatarUrl;
             } else {
                 avatarImg.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'></path><circle cx='12' cy='7' r='4'></circle></svg>";
@@ -526,69 +647,75 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
 
         function handleAvatarUpload(event) {
             let file = event.target.files[0];
-            if(!file) return;
+            if (!file) return;
 
             let reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function (e) {
                 let uData = getCurrentUserData();
                 uData.avatarUrl = e.target.result;
                 syncProfileUI();
+                await saveUserToFirebase(currentUserPhone, uData);
                 alert('Profile picture updated successfully!');
             };
             reader.readAsDataURL(file);
         }
 
-        function saveProfileName() {
+        async function saveProfileName() {
             let newName = document.getElementById('settingNameInput').value.trim();
-            if(!newName) {
+            if (!newName) {
                 alert('Display name cannot be empty.');
                 return;
             }
             let uData = getCurrentUserData();
             uData.displayName = newName;
             syncProfileUI();
+            await saveUserToFirebase(currentUserPhone, uData);
             alert('Display name updated successfully!');
         }
 
-        function changePassword() {
+        async function changePassword() {
             let oldPass = document.getElementById('oldPassInput').value.trim();
             let newPass = document.getElementById('newPassInput').value.trim();
 
-            if(!oldPass || !newPass) {
+            if (!oldPass || !newPass) {
                 alert('Please fill in both old and new passwords.');
                 return;
             }
-            if(!/^[a-zA-Z0-9]+$/.test(newPass)) {
+            if (!/^[a-zA-Z0-9]+$/.test(newPass)) {
                 alert('New password must be alphanumeric.');
                 return;
             }
-            if(registeredUserStore && oldPass !== registeredUserStore.pass) {
+            let uData = getCurrentUserData();
+            let currentSavedPass = (registeredUserStore && registeredUserStore.pass) || uData.pass;
+            if (currentSavedPass && oldPass !== currentSavedPass) {
                 alert('Incorrect current password!');
                 return;
             }
 
-            registeredUserStore.pass = newPass;
+            uData.pass = newPass;
+            if (registeredUserStore) registeredUserStore.pass = newPass;
+            await saveUserToFirebase(currentUserPhone, uData);
             document.getElementById('oldPassInput').value = '';
             document.getElementById('newPassInput').value = '';
             alert('Password changed successfully!');
         }
 
-        function saveAdminSocialLinks() {
+        async function saveAdminSocialLinks() {
             let newWa = document.getElementById('adminWhatsappInput').value.trim();
             let newTg = document.getElementById('adminTelegramInput').value.trim();
 
-            if(newWa) appConfig.whatsapp = newWa;
-            if(newTg) appConfig.telegram = newTg;
+            if (newWa) appConfig.whatsapp = newWa;
+            if (newTg) appConfig.telegram = newTg;
 
-            document.getElementById('floatWhatsappBtn').href = appConfig.whatsapp;
-            document.getElementById('floatTelegramBtn').href = appConfig.telegram;
-
+            applySocialLinksToUI();
+            await saveSharedStateToFirebase();
             alert('Social links updated successfully for all users!');
         }
 
         function launchApp() {
             document.getElementById('auth-container').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
+            switchTab('home');
             updateDashboard();
         }
 
@@ -623,11 +750,11 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             let phone = document.getElementById('dep-phone').value.trim();
             let amt = parseFloat(document.getElementById('dep-amt').value);
 
-            if(!/^07\d{8}$/.test(phone)) {
+            if (!/^07\d{8}$/.test(phone)) {
                 alert('Please enter a valid phone number starting with 07 (10 digits).');
                 return;
             }
-            if(isNaN(amt) || amt < 15000) {
+            if (isNaN(amt) || amt < 15000) {
                 alert('Minimum deposit amount is UGX 15,000.');
                 return;
             }
@@ -661,15 +788,15 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             alert("Payment number copied to clipboard!");
         }
 
-        function finalizeDeposit() {
+        async function finalizeDeposit() {
             let sentPhone = document.getElementById('sent-phone').value.trim();
             let sentAmt = parseFloat(document.getElementById('sent-amt').value);
 
-            if(!/^07\d{8}$/.test(sentPhone)) {
+            if (!/^07\d{8}$/.test(sentPhone)) {
                 alert('Please enter a valid phone number used for sending.');
                 return;
             }
-            if(isNaN(sentAmt) || sentAmt <= 0) {
+            if (isNaN(sentAmt) || sentAmt <= 0) {
                 alert('Please enter a valid amount.');
                 return;
             }
@@ -678,9 +805,11 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
                 type: 'Deposit',
                 amount: sentAmt,
                 phone: sentPhone,
+                accountPhone: currentUserPhone,
                 status: 'Pending'
             });
 
+            await saveSharedStateToFirebase();
             updateDashboard();
             closeModal();
             alert('Deposit submitted. Kindly wait for Admin approval.');
@@ -725,21 +854,22 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             document.getElementById('totalDedText').innerText = 'UGX ' + Math.floor(totalDeduction).toLocaleString();
             document.getElementById('exactReceiveText').innerText = 'UGX ' + Math.floor(exactReceive).toLocaleString();
         }
-        function submitWithdraw() {
+
+        async function submitWithdraw() {
             let name = document.getElementById('w-name').value.trim();
             let phone = document.getElementById('w-phone').value.trim();
             let network = document.getElementById('w-network').value;
             let val = parseFloat(document.getElementById('w-amt').value);
 
-            if(!name) { alert('Please enter full name.'); return; }
-            if(!/^07\d{8}$/.test(phone)) { alert('Please enter a valid phone number starting with 07.'); return; }
-            if(isNaN(val) || val < 5000) { alert('Minimum withdrawal amount is UGX 5,000.'); return; }
+            if (!name) { alert('Please enter full name.'); return; }
+            if (!/^07\d{8}$/.test(phone)) { alert('Please enter a valid phone number starting with 07.'); return; }
+            if (isNaN(val) || val < 5000) { alert('Minimum withdrawal amount is UGX 5,000.'); return; }
 
             let charge = val * 0.10;
             let totalDeduction = val + charge;
             let uData = getCurrentUserData();
 
-            if(totalDeduction > uData.balance) {
+            if (totalDeduction > uData.balance) {
                 alert('Insufficient balance including the 10% withdrawal charge!');
                 return;
             }
@@ -750,41 +880,47 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
                 type: 'Withdrawal',
                 amount: val,
                 phone: phone,
+                accountPhone: currentUserPhone,
                 name: name,
                 network: network,
                 charge: charge,
                 sendAmount: val,
                 status: 'Pending'
             });
+
+            await saveUserToFirebase(currentUserPhone, uData);
+            await saveSharedStateToFirebase();
             updateDashboard();
             closeModal();
-            alert(`🎉 Withdrawal request submitted successfully (Pending Admin Approval).`);
+            alert('🎉 Withdrawal request submitted successfully (Pending Admin Approval).');
         }
 
-        function submitGenericAction(title) {
+        async function submitGenericAction(title) {
             let val = parseFloat(document.getElementById('amtInput').value);
-            if(isNaN(val) || val <= 0) { alert('Please enter a valid amount.'); return; }
+            if (isNaN(val) || val <= 0) { alert('Please enter a valid amount.'); return; }
 
             let uData = getCurrentUserData();
             uData.balance += val;
             uData.totalDep += val;
-            txs.unshift({type: title, amount: val, phone: currentUserPhone, status: 'Approved'});
+            txs.unshift({ type: title, amount: val, phone: currentUserPhone, status: 'Approved' });
+
+            await saveUserToFirebase(currentUserPhone, uData);
+            await saveSharedStateToFirebase();
             updateDashboard();
             closeModal();
             alert('Action completed successfully!');
         }
 
-        function investPlan(price, dailyReturn) {
+        async function investPlan(price, dailyReturn) {
             let uData = getCurrentUserData();
-            if(uData.balance < price) {
-                if(confirm('Insufficient balance to invest directly. Would you like to deposit funds first? (Minimum deposit is UGX 15,000)')) {
+            if (uData.balance < price) {
+                if (confirm('Insufficient balance to invest directly. Would you like to deposit funds first? (Minimum deposit is UGX 15,000)')) {
                     openDepositModal();
                 }
                 return;
             }
             uData.balance -= price;
-            
-            // Permanently saved to the active user's persistent product record array
+
             uData.userProducts.push({
                 price: price,
                 dailyReturn: dailyReturn,
@@ -795,23 +931,47 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
                 nextPayoutTime: Date.now() + 86400000
             });
 
-            txs.unshift({type: `Investment Plan (${price.toLocaleString()} /=)`, amount: price, phone: currentUserPhone, status: 'Approved'});
+            txs.unshift({ type: `Investment Plan (${price.toLocaleString()} /=)`, amount: price, phone: currentUserPhone, status: 'Approved' });
+
+            await saveUserToFirebase(currentUserPhone, uData);
+            await saveSharedStateToFirebase();
             updateDashboard();
             switchTab('myproducts');
             alert(`🎉 Successfully invested UGX ${price.toLocaleString()}! Daily 10% Return: UGX ${dailyReturn.toLocaleString()}`);
         }
 
-        function triggerCheckIn() {
-            let uData = getCurrentUserData();
-            uData.balance += 500;
-            uData.totalEarn += 500;
-            txs.unshift({type: 'Daily Check-in Bonus', amount: 500, phone: currentUserPhone, status: 'Approved'});
+        function getTodayKey() {
+            const now = new Date();
+            return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+        }
+
+        async function triggerCheckIn() {
+            const uData = getCurrentUserData();
+            const today = getTodayKey();
+
+            if (uData.lastCheckInDate === today) {
+                alert('You have already claimed your UGX 200 check-in today. Come back tomorrow!');
+                return;
+            }
+
+            uData.lastCheckInDate = today;
+            uData.balance += 200;
+            uData.totalEarn += 200;
+            txs.unshift({
+                type: 'Daily Check-in Bonus',
+                amount: 200,
+                phone: currentUserPhone,
+                status: 'Approved'
+            });
+
+            await saveUserToFirebase(currentUserPhone, uData);
+            await saveSharedStateToFirebase();
             updateDashboard();
-            alert('🎉 Check-in successful! You earned UGX 500.');
+            alert('Check-in successful! You earned UGX 200.');
         }
 
         function triggerLogout() {
-            if(confirm('Are you sure you want to log out?')) {
+            if (confirm('Are you sure you want to log out?')) {
                 document.getElementById('main-app').style.display = 'none';
                 document.getElementById('auth-container').style.display = 'flex';
                 document.getElementById('log-user').value = '';
@@ -832,11 +992,9 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
 
         function checkAdminPanel() {
             let adminPanel = document.getElementById('admin-panel');
-            if(currentUserPhone === '0759537511') {
+            if (currentUserPhone === '0759537511') {
                 adminPanel.style.display = 'block';
                 renderAdminControlLists();
-                
-                // Set current values in admin inputs
                 document.getElementById('adminWhatsappInput').value = appConfig.whatsapp;
                 document.getElementById('adminTelegramInput').value = appConfig.telegram;
             } else {
@@ -849,7 +1007,7 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             let pendingWiths = txs.filter(t => t.type === 'Withdrawal' && t.status === 'Pending');
 
             let depHtml = '';
-            if(pendingDeps.length === 0) {
+            if (pendingDeps.length === 0) {
                 depHtml = 'No pending deposits.';
             } else {
                 pendingDeps.forEach((t) => {
@@ -867,7 +1025,7 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             document.getElementById('adminPendingDeposits').innerHTML = depHtml;
 
             let withHtml = '';
-            if(pendingWiths.length === 0) {
+            if (pendingWiths.length === 0) {
                 withHtml = 'No pending withdrawals.';
             } else {
                 pendingWiths.forEach((t) => {
@@ -886,66 +1044,88 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             document.getElementById('adminPendingWithdrawals').innerHTML = withHtml;
         }
 
-        function approveTx(index) {
+        async function approveTx(index) {
             let t = txs[index];
-            if(t.status === 'Pending') {
+            if (t && t.status === 'Pending') {
                 t.status = 'Approved';
-                
-                let targetUser = t.phone;
-                if(!usersDB[targetUser]) {
-                    usersDB[targetUser] = {
+                let targetUser = t.accountPhone || t.phone;
+                let cloudTarget = await loadUserFromFirebase(targetUser);
+
+                if (!usersDB[targetUser]) {
+                    usersDB[targetUser] = cloudTarget ? {
+                        balance: cloudTarget.balance ?? 3000,
+                        totalDep: cloudTarget.totalDep ?? 0,
+                        totalWith: cloudTarget.totalWith ?? 0,
+                        totalEarn: cloudTarget.totalEarn ?? 3000,
+                        userProducts: Array.isArray(cloudTarget.userProducts) ? cloudTarget.userProducts : [],
+                        lastCheckInDate: cloudTarget.lastCheckInDate || '',
+                        displayName: cloudTarget.displayName || targetUser,
+                        avatarUrl: cloudTarget.avatarUrl || '',
+                        pass: cloudTarget.pass || ''
+                    } : {
                         balance: 3000,
                         totalDep: 0,
                         totalWith: 0,
                         totalEarn: 3000,
                         userProducts: [],
+                        lastCheckInDate: '',
                         displayName: targetUser,
                         avatarUrl: ''
                     };
                 }
-                let targetUserData = usersDB[targetUser];
 
-                if(t.type === 'Deposit') {
+                let targetUserData = usersDB[targetUser];
+                if (t.type === 'Deposit') {
                     targetUserData.totalDep += t.amount;
                     targetUserData.balance += t.amount;
-                    
+
                     let l1Bonus = t.amount * 0.10;
                     targetUserData.totalEarn += l1Bonus;
                     targetUserData.balance += l1Bonus;
                 }
+
+                await saveUserToFirebase(targetUser, targetUserData);
+                await saveSharedStateToFirebase();
             }
             updateDashboard();
             alert('Transaction approved successfully for user account!');
         }
 
-        function rejectTx(index) {
+        async function rejectTx(index) {
             let t = txs[index];
-            if(t.status === 'Pending') {
+            if (t && t.status === 'Pending') {
                 t.status = 'Rejected';
-                
-                if(t.type === 'Withdrawal') {
-                    let targetUser = t.phone;
-                    if(usersDB[targetUser]) {
+                let targetUser = t.accountPhone || t.phone;
+
+                if (t.type === 'Withdrawal') {
+                    if (!usersDB[targetUser]) {
+                        const cloudTarget = await loadUserFromFirebase(targetUser);
+                        if (cloudTarget) usersDB[targetUser] = cloudTarget;
+                    }
+                    if (usersDB[targetUser]) {
                         let totalDeduction = t.amount + (t.charge || (t.amount * 0.10));
                         usersDB[targetUser].balance += totalDeduction;
-                        usersDB[targetUser].totalWith -= t.amount;
+                        usersDB[targetUser].totalWith = Math.max(0, usersDB[targetUser].totalWith - t.amount);
+                        await saveUserToFirebase(targetUser, usersDB[targetUser]);
                     }
                 }
+                await saveSharedStateToFirebase();
             }
             updateDashboard();
             alert('Transaction has been rejected.');
         }
+
         function updateLog() {
             let logHtml = '';
-            if(txs.length === 0) {
+            if (txs.length === 0) {
                 document.getElementById('txLog').innerHTML = 'No transactions yet.';
                 return;
             }
             txs.forEach((t) => {
                 let badgeColor = 'var(--muted)';
-                if(t.status === 'Approved') badgeColor = 'var(--success)';
-                if(t.status === 'Pending') badgeColor = 'var(--warning)';
-                if(t.status === 'Rejected') badgeColor = 'var(--danger)';
+                if (t.status === 'Approved') badgeColor = 'var(--success)';
+                if (t.status === 'Pending') badgeColor = 'var(--warning)';
+                if (t.status === 'Rejected') badgeColor = 'var(--danger)';
 
                 let sign = t.type.includes('Withdraw') ? '-' : '+';
                 let phoneDisplay = t.phone && t.phone !== 'System' ? `<br><span style="font-size:10px; color:var(--muted)">Phone: ${t.phone}</span>` : '';
@@ -969,25 +1149,40 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             alert("Copied unique referral link!");
         }
 
-        function switchTab(tab) {
-            ['home', 'products', 'referearn', 'transactions', 'myproducts', 'profile'].forEach(t => {
-                let viewEl = document.getElementById(t + '-view');
-                let navEl = document.getElementById('nav-' + t);
-                if(viewEl) viewEl.classList.remove('active');
-                if(navEl) navEl.classList.remove('active');
+        function switchTab(tabName) {
+            document.querySelectorAll('.view').forEach(v => {
+                v.classList.remove('active');
             });
-            let targetView = document.getElementById(tab + '-view');
-            let targetNav = document.getElementById('nav-' + tab);
-            if(targetView) targetView.classList.add('active');
-            if(targetNav) targetNav.classList.add('active');
-            window.scrollTo(0,0);
+
+            const targetView = document.getElementById(`${tabName}-view`);
+            if (targetView) {
+                targetView.classList.add('active');
+            }
+
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('active');
+                const onclickAttr = btn.getAttribute('onclick') || '';
+                if (onclickAttr.includes(`'${tabName}'`) || onclickAttr.includes(`"${tabName}"`)) {
+                    btn.classList.add('active');
+                }
+            });
+
+            if (tabName === 'myproducts') {
+                renderMyProducts();
+            } else if (tabName === 'transactions') {
+                updateLog();
+            } else if (tabName === 'profile') {
+                syncProfileUI();
+                checkAdminPanel();
+            }
+            window.scrollTo(0, 0);
         }
 
         function renderMyProducts() {
             let container = document.getElementById('myProductsList');
-            if(!container) return;
+            if (!container) return;
             let uData = getCurrentUserData();
-            if(uData.userProducts.length === 0) {
+            if (!uData.userProducts || uData.userProducts.length === 0) {
                 container.innerHTML = 'No active investments yet. Purchase a plan from Products.';
                 return;
             }
@@ -1002,7 +1197,7 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
                 html += `
                 <div style="background:#0d1424; padding:12px; border-radius:8px; border:1px solid var(--border); margin-bottom:10px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                        <strong style="color:white">Plan: UGX ${p.price.toLocaleString()}</strong>
+                           <strong style="color:white">Plan: UGX ${p.price.toLocaleString()}</strong>
                         <span style="color:var(--success); font-weight:bold;">Day ${p.currentDay} / ${p.maxDays}</span>
                     </div>
                     <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">
@@ -1016,25 +1211,36 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             container.innerHTML = html;
         }
 
-        setInterval(() => {
+        setInterval(async () => {
             let now = Date.now();
             let updated = false;
-            for(let uKey in usersDB) {
+            let changedUsers = [];
+
+            for (let uKey in usersDB) {
                 let uData = usersDB[uKey];
+                let userChanged = false;
+                if (!Array.isArray(uData.userProducts)) uData.userProducts = [];
                 uData.userProducts.forEach(p => {
-                    if(now >= p.nextPayoutTime && p.currentDay <= p.maxDays) {
+                    if (now >= p.nextPayoutTime && p.currentDay <= p.maxDays) {
                         uData.balance += p.dailyReturn;
                         uData.totalEarn += p.dailyReturn;
                         uData.totalEarn = Math.floor(uData.totalEarn);
                         uData.balance = Math.floor(uData.balance);
                         p.currentDay++;
                         p.nextPayoutTime = now + 86400000;
-                        txs.unshift({type: `Daily Payout (Day ${p.currentDay-1})`, amount: p.dailyReturn, phone: uKey, status: 'Approved'});
+                        txs.unshift({ type: `Daily Payout (Day ${p.currentDay - 1})`, amount: p.dailyReturn, phone: uKey, status: 'Approved' });
                         updated = true;
+                        userChanged = true;
                     }
                 });
+                if (userChanged) changedUsers.push(uKey);
             }
-            if(updated) {
+
+            if (updated) {
+                for (let uKey of changedUsers) {
+                    await saveUserToFirebase(uKey, usersDB[uKey]);
+                }
+                await saveSharedStateToFirebase();
                 updateDashboard();
             } else {
                 renderMyProducts();
@@ -1067,7 +1273,7 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
                 let yOffset = canvas.height - (5 - r) * 35 + Math.sin(angle + r) * 10;
                 
                 let colorIndex = Math.floor((angle + r) * 0.5) % colors.length;
-                if(colorIndex < 0) colorIndex += colors.length;
+                if (colorIndex < 0) colorIndex += colors.length;
                 ctx.fillStyle = colors[colorIndex];
                 ctx.globalAlpha = 0.3 + (r * 0.15);
 
@@ -1079,19 +1285,21 @@ document.getElementById('refLink').value = `${currentDomain}/?ref=${user}`;
             requestAnimationFrame(draw);
         }
         draw();
-        // Automatically capture and fill referral code when someone opens an invite link
-window.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const refCode = urlParams.get('ref') || urlParams.get('code');
-    
-    if (refCode) {
-        const refInput = document.getElementById('reg-ref');
-        if (refInput) {
-            refInput.value = refCode;
-        }
-    }
-});
 
+        // Automatically capture and fill referral code when someone opens an invite link
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref') || urlParams.get('code');
+            
+            if (refCode) {
+                const refInput = document.getElementById('reg-ref');
+                if (refInput) {
+                    refInput.value = refCode;
+                }
+            }
+        });
     </script>
 </body>
-</html> 
+</html>
+    
+   
